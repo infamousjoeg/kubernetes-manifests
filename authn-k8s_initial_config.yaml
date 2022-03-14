@@ -1,0 +1,46 @@
+# This manifest creates a namespace, service account, cluster role, and binds
+# the service account created to the cluster role.
+# This is necessary for the authn-k8s authenticator configuration for CyberArk
+# Conjur Secrets Manager.
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: cyberark-conjur
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: authn-k8s-sa
+  namespace: cyberark-conjur
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: conjur-authenticator
+rules:
+- apiGroups: [""]
+  resources: ["pods", "serviceaccounts"]
+  verbs: ["get", "list"]
+- apiGroups: ["extensions"]
+  resources: [ "deployments", "replicasets"]
+  verbs: ["get", "list"]
+- apiGroups: ["apps"]
+  resources: [ "deployments", "statefulsets", "replicasets"]
+  verbs: ["get", "list"]
+- apiGroups: [""]
+  resources: ["pods/exec"]
+  verbs: ["create", "get"]
+---
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: conjur-authenticator
+subjects:
+- kind: ServiceAccount
+  name: authn-k8s-sa
+  namespace: cyberark-conjur
+roleRef:
+  kind: ClusterRole
+  name: conjur-authenticator
+  apiGroup: rbac.authorization.k8s.io
