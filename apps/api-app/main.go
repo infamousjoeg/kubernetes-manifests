@@ -34,7 +34,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		log.Fatalf("Error retrieving %s: %s", passObjectValue, err)
 	}
 
-	fmt.Fprintf(w, "User: %s\nPassword: %s\n", string(userObjectValue), string(passObjectValue))
+	fmt.Fprintf(w, "API Example\n==========\nUser: %s\nPassword: %s", string(userObjectValue), string(passObjectValue))
 }
 
 func main() {
