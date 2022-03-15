@@ -10,6 +10,20 @@ metadata:
   name: api-app-account
   namespace: api-app
 ---
+apiVersion: v1
+kind: Service
+metadata:
+  name: api-app-service
+  namespace: api-app
+spec:
+  type: LoadBalancer
+  selector:
+    app: api-app
+  ports:
+    - protocol: TCP
+      port: 3033
+      targetPort: 8080
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -67,7 +81,7 @@ spec:
           - mountPath: /run/conjur
             name: conjur-access-token
       - name: api-app
-        image: nfmsjoeg/api-app:1.0.0
+        image: nfmsjoeg/api-app-a379993a0f8c60be0eab0f5f7639d7cc
         imagePullPolicy: IfNotPresent
         env:
           - name: CONJUR_APPLIANCE_URL
