@@ -1,0 +1,98 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: api-app
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: api-app-account
+  namespace: api-app
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-app
+  namespace: api-app
+  labels:
+    app: api-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      role: api-demo
+      app: api-app
+  template:
+    metadata:
+      labels:
+        role: api-demo
+        app: api-app
+    spec:
+      serviceAccountName: api-app-account
+      shareProcessNamespace: true
+      containers:
+      - name: authenticator
+        image: cyberark/conjur-authn-k8s-client:0.23.1
+        imagePullPolicy: IfNotPresent
+        env:
+          - name: MY_POD_NAME
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.name
+          - name: MY_POD_NAMESPACE
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.namespace
+          - name: MY_POD_IP
+            valueFrom:
+              fieldRef:
+                fieldPath: status.podIP
+          - name: CONJUR_APPLIANCE_URL
+            value: https://conjur.joegarcia.dev/api
+          - name: CONJUR_AUTHN_URL
+            value: https://conjur.joegarcia.dev/api/authn-k8s/conjur-demo
+          - name: CONJUR_ACCOUNT
+            value: cyberarkdemo
+          - name: CONJUR_VERSION
+            value: '5'
+          - name: CONJUR_AUTHN_LOGIN
+            value: host/cd/kubernetes/api-app
+          - name: CONJUR_SSL_CERTIFICATE
+            valueFrom:
+              configMapKeyRef:
+                name: conjur-ssl-cert
+                key: conjur_joegarcia_dev.pem
+        volumeMounts:
+          - mountPath: /run/conjur
+            name: conjur-access-token
+      - name: api-app
+        image: nfmsjoeg/api-app:1.0.0
+        imagePullPolicy: IfNotPresent
+        env:
+          - name: CONJUR_APPLIANCE_URL
+            value: https://conjur.joegarcia.dev/api
+          - name: CONJUR_AUTHN_URL
+            value: https://conjur.joegarcia.dev/api/authn-k8s/conjur-demo
+          - name: CONJUR_ACCOUNT
+            value: cyberarkdemo
+          - name: CONJUR_VERSION
+            value: '5'
+          - name: CONJUR_AUTHN_TOKEN_FILE
+            value: /run/conjur/access-token
+          - name: CONJUR_USER_OBJECT
+            value: cd/kubernetes/db/username
+          - name: CONJUR_PASS_OBJECT
+            value: cd/kubernetes/db/password
+          - name: CONJUR_SSL_CERTIFICATE
+            valueFrom:
+              configMapKeyRef:
+                name: conjur-ssl-cert
+                key: conjur_joegarcia_dev.pem
+        volumeMounts:
+          - mountPath: /run/conjur
+            name: conjur-access-token
+      volumes:
+        - name: conjur-access-token
+          emptyDir:
+            medium: Memory
