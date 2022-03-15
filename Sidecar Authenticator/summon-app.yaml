@@ -2,34 +2,48 @@
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: api-app
+  name: summon-app
 ---
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: api-app-account
-  namespace: api-app
+  name: summon-app-account
+  namespace: summon-app
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: summon-app-service
+  namespace: summon-app
+spec:
+  type: LoadBalancer
+  selector:
+    app: summon-app
+  ports:
+    - protocol: TCP
+      port: 3032
+      targetPort: 8080
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: api-app
-  namespace: api-app
+  name: summon-app
+  namespace: summon-app
   labels:
-    app: api-app
+    app: summon-app
 spec:
   replicas: 1
   selector:
     matchLabels:
-      role: api-demo
-      app: api-app
+      role: summon-demo
+      app: summon-app
   template:
     metadata:
       labels:
-        role: api-demo
-        app: api-app
+        role: summon-demo
+        app: summon-app
     spec:
-      serviceAccountName: api-app-account
+      serviceAccountName: summon-app-account
       shareProcessNamespace: true
       containers:
       - name: authenticator
@@ -57,7 +71,7 @@ spec:
           - name: CONJUR_VERSION
             value: '5'
           - name: CONJUR_AUTHN_LOGIN
-            value: host/cd/kubernetes/api-app
+            value: host/cd/kubernetes/summon-app
           - name: CONJUR_SSL_CERTIFICATE
             valueFrom:
               configMapKeyRef:
@@ -66,24 +80,16 @@ spec:
         volumeMounts:
           - mountPath: /run/conjur
             name: conjur-access-token
-      - name: api-app
-        image: nfmsjoeg/api-app:1.0.0
+      - name: summon-app
+        image: nfmsjoeg/summon-app
         imagePullPolicy: IfNotPresent
         env:
           - name: CONJUR_APPLIANCE_URL
-            value: https://conjur.joegarcia.dev/api
-          - name: CONJUR_AUTHN_URL
-            value: https://conjur.joegarcia.dev/api/authn-k8s/conjur-demo
+            value: https://conjur.joegarcia.dev
           - name: CONJUR_ACCOUNT
             value: cyberarkdemo
-          - name: CONJUR_VERSION
-            value: '5'
           - name: CONJUR_AUTHN_TOKEN_FILE
             value: /run/conjur/access-token
-          - name: CONJUR_USER_OBJECT
-            value: cd/kubernetes/db/username
-          - name: CONJUR_PASS_OBJECT
-            value: cd/kubernetes/db/password
           - name: CONJUR_SSL_CERTIFICATE
             valueFrom:
               configMapKeyRef:
