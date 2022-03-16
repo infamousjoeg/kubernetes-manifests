@@ -1,4 +1,3 @@
-
 FROM golang:alpine as builder
 
 ENV GO111MODULE=on
