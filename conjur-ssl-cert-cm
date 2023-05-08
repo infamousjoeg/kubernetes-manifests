@@ -5,4 +5,18 @@ if [[ -z "$1" || -z "$2" ]]; then
     exit 1
 fi
 
-kubectl -n "$1" create configmap conjur-ssl-cert --from-file="$2"
+ssl_cert=$(cat "$2")
+if [[ -z "$ssl_cert" ]]; then
+    echo "Error: could not read certificate from $2"
+    exit 1
+fi
+
+kubectl get configmap conjur-connect -n "$1" -o yaml | \
+    sed -e "s|CONJUR_SSL_CERTIFICATE:.*|CONJUR_SSL_CERTIFICATE: |-
+$ssl_cert|" | \
+    kubectl apply -f -
+
+kubctl get configmap conjur-connect-jwt -n "$1" -o yaml | \
+    sed -e "s|CONJUR_SSL_CERTIFICATE:.*|CONJUR_SSL_CERTIFICATE: |-
+$ssl_cert|" | \
+    kubectl apply -f -

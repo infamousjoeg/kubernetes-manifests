@@ -16,5 +16,7 @@ Once [ko](https://github.com/google/ko) is installed, run the following build co
 
 Ensure the following environment variables are on the container:
 
-- APP_USERNAME
-- APP_PASSWORD
+- DB_HOSTNAME
+- DB_NAME
+- DB_USERNAME
+- DB_PASSWORD

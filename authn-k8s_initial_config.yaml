@@ -1,5 +1,5 @@
-# This manifest creates a namespace, service account, cluster role, and binds
-# the service account created to the cluster role.
+# This manifest creates a namespace, service account, role, and binds
+# the service account created to the namespace role.
 # This is necessary for the authn-k8s authenticator configuration for CyberArk
 # Conjur Secrets Manager.
 ---
@@ -7,20 +7,34 @@ apiVersion: v1
 kind: Namespace
 metadata:
   name: cyberark-conjur
+  labels:
+    pod-security.kubernetes.io/enforce: baseline
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted
 ---
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: authn-k8s-sa
+  name: conjur-cluster
   namespace: cyberark-conjur
 ---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: conjur-cluster-secret
+  namespace: cyberark-conjur
+  annotations:
+    kubernetes.io/service-account.name: conjur-cluster
+type: kubernetes.io/service-account-token
+---
 apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
+kind: Role
 metadata:
   name: conjur-authenticator
+  namespace: cyberark-conjur
 rules:
 - apiGroups: [""]
-  resources: ["pods", "serviceaccounts"]
+  resources: ["pods", "serviceaccounts", "namespaces"]
   verbs: ["get", "list"]
 - apiGroups: ["extensions"]
   resources: [ "deployments", "replicasets"]
@@ -32,15 +46,124 @@ rules:
   resources: ["pods/exec"]
   verbs: ["create", "get"]
 ---
-kind: ClusterRoleBinding
+kind: RoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
   name: conjur-authenticator
+  namespace: cyberark-conjur
 subjects:
 - kind: ServiceAccount
-  name: authn-k8s-sa
+  name: conjur-cluster
   namespace: cyberark-conjur
 roleRef:
-  kind: ClusterRole
+  kind: Role
   name: conjur-authenticator
   apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: conjur-connect
+  namespace: cyberark-conjur
+  labels:
+    app.kubernetes.io/name: "conjur-connect-configmap"
+    app.kubernetes.io/instance: "conjur-default-configmap"
+    app.kubernetes.io/part-of: "conjur-config"
+    conjur.org/name: "conjur-connect-configmap"
+data:
+  CONJUR_ACCOUNT: cyberarkdemo
+  CONJUR_APPLIANCE_URL: "https://conjur.joegarcia.dev"
+  CONJUR_AUTHN_URL: "https://conjur.joegarcia.dev/authn-k8s/conjur-demo"
+  CONJUR_AUTHENTICATOR_ID: "conjur-demo"
+  CONJUR_VERSION: "5"
+  CONJUR_SSL_CERTIFICATE: |-
+    -----BEGIN CERTIFICATE-----
+    MIIGSjCCBTKgAwIBAgIRAL/9hrSA33kmO3Q044e6HzowDQYJKoZIhvcNAQELBQAw
+    gY8xCzAJBgNVBAYTAkdCMRswGQYDVQQIExJHcmVhdGVyIE1hbmNoZXN0ZXIxEDAO
+    BgNVBAcTB1NhbGZvcmQxGDAWBgNVBAoTD1NlY3RpZ28gTGltaXRlZDE3MDUGA1UE
+    AxMuU2VjdGlnbyBSU0EgRG9tYWluIFZhbGlkYXRpb24gU2VjdXJlIFNlcnZlciBD
+    QTAeFw0yMjA5MDcwMDAwMDBaFw0yMzEwMDEyMzU5NTlaMB8xHTAbBgNVBAMTFGNv
+    bmp1ci5qb2VnYXJjaWEuZGV2MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKC
+    AQEAw7FiYvfYq9pMpbRvcUtTVrOnUOEZXPAyECe4efJ8tJdRnAK4pQYHbeCOCj5G
+    LpvIPaKk4TYAhVr4qXeViraHFHerMs5yPtS+O91hBgRiHAQGQZZ0T0PrN7B78Xrx
+    5l+/DEk5x2W99hXJbkzwJX1njUkMuI1177wM32qjkD7vTNFw5PDxjJsYaoVdEan7
+    HiyohJQ6hYJVIXR76hyYCL1Yz28KNKGXIJqQcVU3zSV9yWghO2AqmtNrUBpYmGXM
+    1y9JY3DMadSh62Kj/bbJI3nft1Kzwut8igHy+EmvMDkXe/DrDJj3gvlYOHubMRrp
+    crTohBlcrcqi9MowjcCTL75KrwIDAQABo4IDDjCCAwowHwYDVR0jBBgwFoAUjYxe
+    xFStiuF36Zv5mwXhuAGNYeEwHQYDVR0OBBYEFGdPC4PX9prya850X1XIBWSJjIJO
+    MA4GA1UdDwEB/wQEAwIFoDAMBgNVHRMBAf8EAjAAMB0GA1UdJQQWMBQGCCsGAQUF
+    BwMBBggrBgEFBQcDAjBJBgNVHSAEQjBAMDQGCysGAQQBsjEBAgIHMCUwIwYIKwYB
+    BQUHAgEWF2h0dHBzOi8vc2VjdGlnby5jb20vQ1BTMAgGBmeBDAECATCBhAYIKwYB
+    BQUHAQEEeDB2ME8GCCsGAQUFBzAChkNodHRwOi8vY3J0LnNlY3RpZ28uY29tL1Nl
+    Y3RpZ29SU0FEb21haW5WYWxpZGF0aW9uU2VjdXJlU2VydmVyQ0EuY3J0MCMGCCsG
+    AQUFBzABhhdodHRwOi8vb2NzcC5zZWN0aWdvLmNvbTA5BgNVHREEMjAwghRjb25q
+    dXIuam9lZ2FyY2lhLmRldoIYd3d3LmNvbmp1ci5qb2VnYXJjaWEuZGV2MIIBfAYK
+    KwYBBAHWeQIEAgSCAWwEggFoAWYAdgCt9776fP8QyIudPZwePhhqtGcpXc+xDCTK
+    hYY069yCigAAAYMYipw+AAAEAwBHMEUCIA3VkCzaBsn1CdVZ2aKi6cGwsklWs3Kb
+    b2FvHn0PMPr7AiEAmUCnH48hX75jR1BC33IiNSUnTMlMjZqY3yNkjV1heekAdQB6
+    MoxU2LcttiDqOOBSHumEFnAyE4VNO9IrwTpXo1LrUgAAAYMYipxhAAAEAwBGMEQC
+    IH8OYtOImzPYeapaPLFLeN9PZKULMRfWErTIu1kgNtUmAiB/+MGbYiJnMF/yFyeI
+    2HikTXidFpgzaYOQNjP6L+mOgwB1AOg+0No+9QY1MudXKLyJa8kD08vREWvs62nh
+    d31tBr1uAAABgxiKnCIAAAQDAEYwRAIgGLZV+egyck/JGw/PZD9DXsvh/GhL16gm
+    lh1dowjB4k4CIHvgCf1dm4hO0O6Nzqr+Vft9UbYxulWxO1gxbIyKsxTfMA0GCSqG
+    SIb3DQEBCwUAA4IBAQBUAYn6E8Erwq4jFkTP7zzcMl40c7pjYrkLlR+KPFscyc21
+    VSzPRSjHYjMu1LjyXIcx08DZ8UhSJqVzLx+sNAqt+3Nxvd3cJk1IKdspcVpOxnBj
+    VnRmK6hDvCFgYlEv8+Bq8rdBznxCLxFkmFxn43g7D34l6stp0xfocpM4XdJFqXmK
+    ERlJ3nxL+jyjP66356PaJwptHczel4dHQhnh61p2UnXr/PZs2+8QoAOA53gAafgs
+    k13ZEVX9VD+l9DSS1vxR2ny8ne0nfL/aAjtVklIJYFK09yA+1A/LQLZouOOyW70z
+    /zIXopVUy46Hsuf31ddtNzEz7nxtIFlNl1UtQnGf
+    -----END CERTIFICATE-----
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: conjur-connect-jwt
+  namespace: cyberark-conjur
+  labels:
+    app.kubernetes.io/name: "conjur-connect-configmap-jwt"
+    app.kubernetes.io/instance: "conjur-jwt-configmap"
+    app.kubernetes.io/part-of: "conjur-config"
+    conjur.org/name: "conjur-connect-configmap-jwt"
+data:
+  CONJUR_ACCOUNT: cyberarkdemo
+  CONJUR_APPLIANCE_URL: "https://conjur.joegarcia.dev"
+  CONJUR_AUTHN_URL: "https://conjur.joegarcia.dev/authn-jwt/k8s-conjur-demo"
+  CONJUR_AUTHENTICATOR_ID: "k8s-conjur-demo"
+  CONJUR_VERSION: "5"
+  CONJUR_SSL_CERTIFICATE: |-
+    -----BEGIN CERTIFICATE-----
+    MIIGSjCCBTKgAwIBAgIRAL/9hrSA33kmO3Q044e6HzowDQYJKoZIhvcNAQELBQAw
+    gY8xCzAJBgNVBAYTAkdCMRswGQYDVQQIExJHcmVhdGVyIE1hbmNoZXN0ZXIxEDAO
+    BgNVBAcTB1NhbGZvcmQxGDAWBgNVBAoTD1NlY3RpZ28gTGltaXRlZDE3MDUGA1UE
+    AxMuU2VjdGlnbyBSU0EgRG9tYWluIFZhbGlkYXRpb24gU2VjdXJlIFNlcnZlciBD
+    QTAeFw0yMjA5MDcwMDAwMDBaFw0yMzEwMDEyMzU5NTlaMB8xHTAbBgNVBAMTFGNv
+    bmp1ci5qb2VnYXJjaWEuZGV2MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKC
+    AQEAw7FiYvfYq9pMpbRvcUtTVrOnUOEZXPAyECe4efJ8tJdRnAK4pQYHbeCOCj5G
+    LpvIPaKk4TYAhVr4qXeViraHFHerMs5yPtS+O91hBgRiHAQGQZZ0T0PrN7B78Xrx
+    5l+/DEk5x2W99hXJbkzwJX1njUkMuI1177wM32qjkD7vTNFw5PDxjJsYaoVdEan7
+    HiyohJQ6hYJVIXR76hyYCL1Yz28KNKGXIJqQcVU3zSV9yWghO2AqmtNrUBpYmGXM
+    1y9JY3DMadSh62Kj/bbJI3nft1Kzwut8igHy+EmvMDkXe/DrDJj3gvlYOHubMRrp
+    crTohBlcrcqi9MowjcCTL75KrwIDAQABo4IDDjCCAwowHwYDVR0jBBgwFoAUjYxe
+    xFStiuF36Zv5mwXhuAGNYeEwHQYDVR0OBBYEFGdPC4PX9prya850X1XIBWSJjIJO
+    MA4GA1UdDwEB/wQEAwIFoDAMBgNVHRMBAf8EAjAAMB0GA1UdJQQWMBQGCCsGAQUF
+    BwMBBggrBgEFBQcDAjBJBgNVHSAEQjBAMDQGCysGAQQBsjEBAgIHMCUwIwYIKwYB
+    BQUHAgEWF2h0dHBzOi8vc2VjdGlnby5jb20vQ1BTMAgGBmeBDAECATCBhAYIKwYB
+    BQUHAQEEeDB2ME8GCCsGAQUFBzAChkNodHRwOi8vY3J0LnNlY3RpZ28uY29tL1Nl
+    Y3RpZ29SU0FEb21haW5WYWxpZGF0aW9uU2VjdXJlU2VydmVyQ0EuY3J0MCMGCCsG
+    AQUFBzABhhdodHRwOi8vb2NzcC5zZWN0aWdvLmNvbTA5BgNVHREEMjAwghRjb25q
+    dXIuam9lZ2FyY2lhLmRldoIYd3d3LmNvbmp1ci5qb2VnYXJjaWEuZGV2MIIBfAYK
+    KwYBBAHWeQIEAgSCAWwEggFoAWYAdgCt9776fP8QyIudPZwePhhqtGcpXc+xDCTK
+    hYY069yCigAAAYMYipw+AAAEAwBHMEUCIA3VkCzaBsn1CdVZ2aKi6cGwsklWs3Kb
+    b2FvHn0PMPr7AiEAmUCnH48hX75jR1BC33IiNSUnTMlMjZqY3yNkjV1heekAdQB6
+    MoxU2LcttiDqOOBSHumEFnAyE4VNO9IrwTpXo1LrUgAAAYMYipxhAAAEAwBGMEQC
+    IH8OYtOImzPYeapaPLFLeN9PZKULMRfWErTIu1kgNtUmAiB/+MGbYiJnMF/yFyeI
+    2HikTXidFpgzaYOQNjP6L+mOgwB1AOg+0No+9QY1MudXKLyJa8kD08vREWvs62nh
+    d31tBr1uAAABgxiKnCIAAAQDAEYwRAIgGLZV+egyck/JGw/PZD9DXsvh/GhL16gm
+    lh1dowjB4k4CIHvgCf1dm4hO0O6Nzqr+Vft9UbYxulWxO1gxbIyKsxTfMA0GCSqG
+    SIb3DQEBCwUAA4IBAQBUAYn6E8Erwq4jFkTP7zzcMl40c7pjYrkLlR+KPFscyc21
+    VSzPRSjHYjMu1LjyXIcx08DZ8UhSJqVzLx+sNAqt+3Nxvd3cJk1IKdspcVpOxnBj
+    VnRmK6hDvCFgYlEv8+Bq8rdBznxCLxFkmFxn43g7D34l6stp0xfocpM4XdJFqXmK
+    ERlJ3nxL+jyjP66356PaJwptHczel4dHQhnh61p2UnXr/PZs2+8QoAOA53gAafgs
+    k13ZEVX9VD+l9DSS1vxR2ny8ne0nfL/aAjtVklIJYFK09yA+1A/LQLZouOOyW70z
+    /zIXopVUy46Hsuf31ddtNzEz7nxtIFlNl1UtQnGf
+    -----END CERTIFICATE-----
